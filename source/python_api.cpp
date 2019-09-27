@@ -56,69 +56,54 @@ public:
 			throw std::runtime_error("Input width and height must match the format defined in the filter");
 		}
 
-		// allocate dst memory
+		// allocate temp memory
 		const ssize_t dst_width = this->dst_format.width;
 		const ssize_t dst_height = this->dst_format.height;
+		ImagePlane<T> src_image(src_width, src_height * channels); // allocate CHW data
 		ImagePlane<T> dst_image(dst_width, dst_height * channels); // allocate CHW data
 
 		// dst protobuf
 		std::vector<ssize_t> dst_shape = src_buf.shape;
 		dst_shape[ndim - 1] = dst_width;
 		dst_shape[ndim - 2] = dst_height;
-		std::vector<ssize_t> dst_strides(ndim);
-		dst_strides[ndim - 1] = sizeof(T);
-		dst_strides[ndim - 2] = dst_image.getStride();
-		if (ndim == 3) dst_strides[ndim - 3] = dst_image.getStride() * dst_height;
-		PyArr<T> dst_arr(dst_shape, dst_strides, dst_image.getData());
+		PyArr<T> dst_arr(dst_shape);
 		py::buffer_info dst_buf = dst_arr.request();
 
-		// check if src data layout matches alignment requirement
-		// copy data to aligned memory if necessary
+		// copy src data to aligned memory
 		const std::vector<ssize_t> src_strides = src_buf.strides;
 		const ssize_t src_stride_c = ndim > 2 ? src_strides[ndim - 3] : 0;
 		const ssize_t src_stride_h = src_strides[ndim - 2];
 		const ssize_t src_stride_w = src_strides[ndim - 1];
 
-		bool align_begin = reinterpret_cast<size_t>(src_buf.ptr) % ALIGNMENT == 0;
-		bool align_plane = ndim > 2 ? src_stride_c == src_height * src_stride_h : true;
-		bool align_row = src_stride_h % ALIGNMENT == 0;
-		bool align_elem = src_stride_w == sizeof(T);
-
-		ImagePlane<T> src_image;
-
-		if (!align_elem) // not continuous elements, element-wise copy
+		if (src_stride_w != sizeof(T)) // not continuous elements, element-wise copy
 		{
-			src_image = ImagePlane<T>(src_width, src_height * channels);
-
 			for (ssize_t c = 0; c < channels; ++c)
 			{
 				for (ssize_t h = 0; h < src_height; ++h)
 				{
-					const uint8_t *src_ptr = static_cast<const uint8_t *>(src_buf.ptr) + c * src_stride_c + h * src_stride_h;
-					uint8_t *dst_ptr = reinterpret_cast<uint8_t *>(src_image.getData()) + (c * src_height + h) * src_image.getStride();
+					const uint8_t *origin_ptr = static_cast<const uint8_t *>(src_buf.ptr)
+						+ c * src_stride_c + h * src_stride_h;
+					uint8_t *target_ptr = reinterpret_cast<uint8_t *>(src_image.getData())
+						+ (c * src_height + h) * src_image.getStride();
 
-					for (const uint8_t *src_upper = src_ptr + src_width * src_stride_w; src_ptr < src_upper;
-						src_ptr += src_stride_w, dst_ptr += sizeof(T))
+					for (const uint8_t *origin_upper = origin_ptr + src_width * src_stride_w; origin_ptr < origin_upper;
+						origin_ptr += src_stride_w, target_ptr += sizeof(T))
 					{
-						*reinterpret_cast<T *>(dst_ptr) = *reinterpret_cast<const T *>(src_ptr);
+						*reinterpret_cast<T *>(target_ptr) = *reinterpret_cast<const T *>(origin_ptr);
 					}
 				}
 			}
 		}
-		else if (align_begin && align_plane && align_row) // continuous elements, aligned data, directly create a reference
-		{
-			src_image = ImagePlane<T>(src_width, src_height * channels, src_stride_h, src_buf.ptr);
-		}
 		else // continuous elements, not aligned data, copy with bitblt
 		{
-			src_image = ImagePlane<T>(src_width, src_height * channels);
-
 			for (ssize_t c = 0; c < channels; ++c)
 			{
-				const uint8_t *src_ptr = static_cast<const uint8_t *>(src_buf.ptr) + c * src_stride_c;
-				uint8_t *dst_ptr = reinterpret_cast<uint8_t *>(src_image.getData()) + c * src_height * src_image.getStride();
+				const uint8_t *origin_ptr = static_cast<const uint8_t *>(src_buf.ptr)
+					+ c * src_stride_c;
+				uint8_t *target_ptr = reinterpret_cast<uint8_t *>(src_image.getData())
+					+ c * src_height * src_image.getStride();
 
-				bitblt(dst_ptr, src_image.getStride(), src_ptr,
+				bitblt(target_ptr, src_image.getStride(), origin_ptr,
 					src_stride_h, src_width * sizeof(T), src_height);
 			}
 		}
@@ -142,6 +127,45 @@ public:
 				{ src_data, src_data + src_stride_c, src_data + 2 * src_stride_c },
 				{ dst_stride_h, dst_stride_h, dst_stride_h },
 				{ src_stride_h, src_stride_h, src_stride_h });
+		}
+
+		// copy dst data from aligned memory
+		const std::vector<ssize_t> dst_strides = dst_buf.strides;
+		const ssize_t dst_stride_c = ndim > 2 ? dst_strides[ndim - 3] : 0;
+		const ssize_t dst_stride_h = dst_strides[ndim - 2];
+		const ssize_t dst_stride_w = dst_strides[ndim - 1];
+
+		if (dst_stride_w != sizeof(T)) // not continuous elements, element-wise copy
+		{
+			for (ssize_t c = 0; c < channels; ++c)
+			{
+				for (ssize_t h = 0; h < dst_height; ++h)
+				{
+					const uint8_t *origin_ptr = reinterpret_cast<const uint8_t *>(dst_image.getData())
+						+ (c * dst_height + h) * dst_image.getStride();
+					uint8_t *target_ptr = static_cast<uint8_t *>(dst_buf.ptr)
+						+ c * dst_stride_c + h * dst_stride_h;
+
+					for (const uint8_t *origin_upper = origin_ptr + dst_width * sizeof(T); origin_ptr < origin_upper;
+						origin_ptr += sizeof(T), target_ptr += dst_stride_w)
+					{
+						*reinterpret_cast<T *>(target_ptr) = *reinterpret_cast<const T *>(origin_ptr);
+					}
+				}
+			}
+		}
+		else // continuous elements, not aligned data, copy with bitblt
+		{
+			for (ssize_t c = 0; c < channels; ++c)
+			{
+				const uint8_t *origin_ptr = reinterpret_cast<const uint8_t *>(dst_image.getData())
+					+ c * dst_height * dst_image.getStride();
+				uint8_t *target_ptr = static_cast<uint8_t *>(dst_buf.ptr)
+					+ c * dst_stride_c;
+
+				bitblt(target_ptr, dst_stride_h, origin_ptr,
+					dst_image.getStride(), dst_width * sizeof(T), dst_height);
+			}
 		}
 
 		// return array
