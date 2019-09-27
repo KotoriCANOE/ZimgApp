@@ -7,7 +7,8 @@
 namespace py = pybind11;
 
 template <typename T>
-using PyArr = py::array_t<T, py::array::c_style | py::array::forcecast>;
+using PyArr = py::array_t<T, py::array::forcecast>;
+//using PyArr = py::array_t<T, py::array::c_style | py::array::forcecast>;
 
 ////////
 
@@ -275,6 +276,41 @@ PYBIND11_MODULE(zimg, m)
 		.value("SPLINE36", ZIMG_RESIZE_SPLINE36)
 		.value("LANCZOS", ZIMG_RESIZE_LANCZOS);
 	////////
+	// ZFormat
+	typedef zimgxx::zimage_format Zformat;
+	py::class_<Zformat> zformat(m, "ZFormat");
+	zformat
+		.def(py::init<>())
+		.def_readwrite("width", &Zformat::width)
+		.def_readwrite("height", &Zformat::height)
+		.def_readwrite("pixel_type", &Zformat::pixel_type)
+		.def_readwrite("subsample_w", &Zformat::subsample_w)
+		.def_readwrite("subsample_h", &Zformat::subsample_h)
+		.def_readwrite("color_family", &Zformat::color_family)
+		.def_readwrite("matrix_coefficients", &Zformat::matrix_coefficients)
+		.def_readwrite("transfer_characteristics", &Zformat::transfer_characteristics)
+		.def_readwrite("color_primaries", &Zformat::color_primaries)
+		.def_readwrite("depth", &Zformat::depth)
+		.def_readwrite("pixel_range", &Zformat::pixel_range)
+		.def_readwrite("field_parity", &Zformat::field_parity)
+		.def_readwrite("chroma_location", &Zformat::chroma_location)
+		.def_readwrite("active_region", &Zformat::active_region)
+		;
+	// ZGraph
+	typedef zimgxx::zfilter_graph_builder_params Zparams;
+	py::class_<Zparams> zgraph(m, "ZGraph");
+	zgraph
+		.def(py::init<>())
+		.def_readwrite("resample_filter", &Zparams::resample_filter)
+		.def_readwrite("filter_param_a", &Zparams::filter_param_a)
+		.def_readwrite("filter_param_b", &Zparams::filter_param_b)
+		.def_readwrite("resample_filter_uv", &Zparams::resample_filter_uv)
+		.def_readwrite("filter_param_a_uv", &Zparams::filter_param_a_uv)
+		.def_readwrite("filter_param_b_uv", &Zparams::filter_param_b_uv)
+		.def_readwrite("dither_type", &Zparams::dither_type)
+		.def_readwrite("cpu_type", &Zparams::cpu_type)
+		.def_readwrite("nominal_peak_luminance", &Zparams::nominal_peak_luminance)
+		;
 	// ZResizeParams
 	py::class_<ZResizeParams> zresize_params(m, "ZResizeParams");
 	zresize_params
@@ -295,6 +331,8 @@ PYBIND11_MODULE(zimg, m)
 	py::class_<ZFilterPy> zfilter(m, "ZFilter");
 	zfilter
 		// constructors
+		.def(py::init<const Zformat &, const Zformat &, const Zparams &>(),
+			"src_format"_a, "dst_format"_a, "params"_a)
 		.def(py::init<const ZResizeParams &,
 			unsigned, unsigned, unsigned, unsigned,
 			double, double, double, double>(),
