@@ -18,7 +18,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\source\main.cpp">
+    <ClCompile Include="..\source\python_api.cpp">
       <Filter>source</Filter>
     </ClCompile>
   </ItemGroup>

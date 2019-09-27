@@ -13,6 +13,11 @@ int main(int argc, char **argv)
 	// create Image
 	ImagePlane<DTYPE> src(SW, SH), dst(DW, DH);
 	src.from(sizeof(src_row), src_row.data());
+	//
+	size_t src_addr = reinterpret_cast<size_t>(src.getData());
+	std::cout << src.getData() << std::endl;
+	std::cout << src_addr << " = " << src_addr / sizeof(DTYPE) << " * "
+		<< sizeof(DTYPE) << " + " << src_addr % sizeof(DTYPE) << std::endl;
 	// zimg API
 	std::cout << "API version: " << zimg_get_api_version(nullptr, nullptr) << std::endl;
 	// create ZFilter instance

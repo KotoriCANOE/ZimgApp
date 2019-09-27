@@ -77,10 +77,15 @@ public:
 	typedef T *pointer;
 	typedef const T *const_pointer;
 
+	// default constructor
+	ImagePlane()
+		: width(0), height(0), stride(0), data(nullptr)
+	{}
+
 	// create an instance based on width and height of the image
 	// stride is automatically calculated, memory allocation is implicitly performed
 	// *** memory alignment is guaranteed ***
-	ImagePlane(int width, int height)
+	ImagePlane(int64_t width, int64_t height)
 		: width(width), height(height), stride(this->cal_stride(width)),
 		data(this->allocate(this->cal_stride(width) * height))
 	{}
@@ -88,7 +93,7 @@ public:
 	// create an instance refering to the existing data
 	// stride is inherited, memory allocation is handled by the user
 	// *** no guarantee about the memory alignment ***
-	ImagePlane(int width, int height, Tdiff stride, void *data)
+	ImagePlane(int64_t width, int64_t height, Tdiff stride, void *data)
 		: width(width), height(height), stride(stride),
 		data(static_cast<pointer>(data), [](void *ptr) {})
 	{}
@@ -97,7 +102,7 @@ public:
 	// stride is inherited
 	// shared_ptr is used to automatically handle memory deallocation
 	// *** no guarantee about the memory alignment ***
-	ImagePlane(int width, int height, Tdiff stride, const Tptr &data)
+	ImagePlane(int64_t width, int64_t height, Tdiff stride, const Tptr &data)
 		: width(width), height(height), stride(stride),
 		data(data)
 	{}
@@ -130,8 +135,8 @@ public:
 		return Tthis(this->width, this->height, this->stride, new_data);
 	}
 
-	int getWidth() const { return this->width; }
-	int getHeight() const { return this->height; }
+	int64_t getWidth() const { return this->width; }
+	int64_t getHeight() const { return this->height; }
 	Tdiff getStride() const { return this->stride; }
 	const Tptr &getPtr() const { return this->data; }
 	const_pointer getData() const { return this->data.get(); }
@@ -145,7 +150,7 @@ public:
 	}
 
 	// static function to calculate minimum stride match the required memory alignment
-	static Tdiff cal_stride(int width, size_t alignment = ALIGNMENT)
+	static Tdiff cal_stride(int64_t width, size_t alignment = ALIGNMENT)
 	{
 		return (static_cast<size_t>(width) * sizeof(T) + alignment - 1) / alignment * alignment;
 	}
@@ -157,8 +162,8 @@ public:
 	}
 
 protected:
-	int width;
-	int height;
+	int64_t width;
+	int64_t height;
 	Tdiff stride;
 	Tptr data;
 };
@@ -175,6 +180,11 @@ public:
 	typedef std::shared_ptr<T> Tptr;
 	typedef T *pointer;
 	typedef const T *const_pointer;
+
+	// default constructor
+	Image()
+		: num_planes(0)
+	{}
 
 	// create an image with a single plane
 	explicit Image(const Tplane &plane0)
@@ -194,8 +204,8 @@ public:
 
 	int getNumPlanes() const { return this->num_planes; }
 	const Tplane &getPlane(int p = 0) const { return this->planes[p]; }
-	int getWidth(int p = 0) const { return this->planes[p].getWidth(); }
-	int getHeight(int p = 0) const { return this->planes[p].getHeight(); }
+	int64_t getWidth(int p = 0) const { return this->planes[p].getWidth(); }
+	int64_t getHeight(int p = 0) const { return this->planes[p].getHeight(); }
 	Tdiff getStride(int p = 0) const { return this->planes[p].getStride(); }
 	const Tptr &getPtr(int p = 0) const { return this->planes[p].getPtr(); }
 	const_pointer getData(int p = 0) const { return this->planes[p].getData(); }
@@ -220,7 +230,7 @@ struct ZResizeParams
 	zimg_dither_type_e dither_type = ZIMG_DITHER_NONE;
 	zimg_cpu_type_e cpu_type = ZIMG_CPU_AUTO;
 
-	static ZResizeParams build(int planes, int depth = 8)
+	static ZResizeParams build(int planes = 1, unsigned depth = 8)
 	{
 		ZResizeParams params;
 		params.pixel_type = depth > 16 ? ZIMG_PIXEL_FLOAT : depth > 8 ? ZIMG_PIXEL_WORD : ZIMG_PIXEL_BYTE;
@@ -252,7 +262,7 @@ public:
 	// can only perform resizing without other colorspace conversions
 	ZFilter(const ZResizeParams &params,
 		unsigned src_width, unsigned src_height, unsigned dst_width, unsigned dst_height,
-		double roi_left = NAN, double roi_top = NAN, double roi_width = NAN, double roi_height = NAN)
+		double roi_left = 0, double roi_top = 0, double roi_width = 0, double roi_height = 0)
 	{
 		// source format
 		Zformat src_format;
@@ -262,6 +272,10 @@ public:
 		src_format.color_family = params.color_family;
 		src_format.depth = params.depth;
 		src_format.pixel_range = params.pixel_range;
+		src_format.active_region.left = roi_left;
+		src_format.active_region.top = roi_top;
+		src_format.active_region.width = roi_width > 0 ? roi_width : src_width - roi_width;
+		src_format.active_region.height = roi_height > 0 ? roi_height : src_height - roi_height;
 		// target format
 		Zformat dst_format;
 		dst_format.width = dst_width;
@@ -284,20 +298,49 @@ public:
 		this->init(src_format, dst_format, g_params);
 	}
 
+	// perform conversion on image data pointer (=ZIMG_COLOR_GREY)
+	void operator()(void *dst, const void *src,
+		std::ptrdiff_t dst_stride, std::ptrdiff_t src_stride)
+	{
+		Zbuffer buf_dst;
+		ZbufferC buf_src;
+		buf_src.data(0) = src;
+		buf_src.stride(0) = src_stride;
+		buf_src.mask(0) = ZIMG_BUFFER_MAX;
+		buf_dst.data(0) = dst;
+		buf_dst.stride(0) = dst_stride;
+		buf_dst.mask(0) = ZIMG_BUFFER_MAX;
+		this->graph.process(buf_src, buf_dst, this->tmp_buf.get());
+	}
+
+	// perform conversion on image data pointer (!=ZIMG_COLOR_GREY)
+	void operator()(std::array<void *, MAX_PLANES> dst, std::array<const void *, MAX_PLANES> src,
+		std::array<std::ptrdiff_t, MAX_PLANES> dst_stride, std::array<std::ptrdiff_t, MAX_PLANES> src_stride)
+	{
+		Zbuffer buf_dst;
+		ZbufferC buf_src;
+		for (int p = 0; p < MAX_PLANES; ++p)
+		{
+			buf_src.data(p) = src[p];
+			buf_src.stride(p) = src_stride[p];
+			buf_src.mask(p) = ZIMG_BUFFER_MAX;
+		}
+		for (int p = 0; p < MAX_PLANES; ++p)
+		{
+			buf_dst.data(p) = dst[p];
+			buf_dst.stride(p) = dst_stride[p];
+			buf_dst.mask(p) = ZIMG_BUFFER_MAX;
+		}
+		this->graph.process(buf_src, buf_dst, this->tmp_buf.get());
+	}
+
 	// perform conversion on ImagePlane
 	// should be called only when color family is ZIMG_COLOR_GREY
 	template<typename T>
 	void operator()(ImagePlane<T> &dst, const ImagePlane<T> &src)
 	{
-		Zbuffer buf_dst;
-		ZbufferC buf_src;
-		buf_src.data(0) = src.getData();
-		buf_src.stride(0) = src.getStride();
-		buf_src.mask(0) = ZIMG_BUFFER_MAX;
-		buf_dst.data(0) = dst.getData();
-		buf_dst.stride(0) = dst.getStride();
-		buf_dst.mask(0) = ZIMG_BUFFER_MAX;
-		graph.process(buf_src, buf_dst, this->tmp_buf.get());
+		this->operator()(dst.getData(), src.getData(),
+			dst.getStride(), src.getStride());
 	}
 
 	// perform conversion on Image
@@ -319,21 +362,25 @@ public:
 			buf_dst.stride(p) = dst.getStride(p);
 			buf_dst.mask(p) = ZIMG_BUFFER_MAX;
 		}
-		graph.process(buf_src, buf_dst, this->tmp_buf.get());
+		this->graph.process(buf_src, buf_dst, this->tmp_buf.get());
 	}
 
 protected:
+	Zformat src_format;
+	Zformat dst_format;
 	Zparams params;
 	Zgraph graph;
 	TempPtr tmp_buf;
 
 	// disable copy constructor and copy assignment, as tmp_buf should not be shared
-	ZFilter(const ZFilter &other) = delete;
-	ZFilter &operator=(const ZFilter &other) = delete;
+	ZFilter(const Tthis &other) = delete;
+	Tthis &operator=(const Tthis &other) = delete;
 
 	// initialize zimage parameters, zimage filter graph and temporary buffer
 	void init(const Zformat &src_format, const Zformat &dst_format, const Zparams &params)
 	{
+		this->src_format = src_format;
+		this->dst_format = dst_format;
 		this->params = params;
 		this->graph = Zgraph::build(src_format, dst_format, &params);
 		this->tmp_buf = TempPtr(aligned_malloc(this->graph.get_tmp_size(), ALIGNMENT), AlignedDeleter());
