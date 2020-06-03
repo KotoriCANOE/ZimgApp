@@ -7,7 +7,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>D:\Repo\pybind11\pybind11-2.3.0\include;C:\Users\mabowen01\AppData\Local\Continuum\miniconda3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Repo\pybind11\pybind11-2.5.0\include;C:\Users\mabowen01\AppData\Local\Continuum\miniconda3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>C:\Users\mabowen01\AppData\Local\Continuum\miniconda3\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
