@@ -297,20 +297,20 @@ PYBIND11_MODULE(zimg, m)
 		.def_readwrite("chroma_location", &Zformat::chroma_location)
 		.def_readwrite("active_region", &Zformat::active_region)
 		;
-	// ZGraph
-	typedef zimgxx::zfilter_graph_builder_params Zparams;
-	py::class_<Zparams> zgraph(m, "ZGraph");
-	zgraph
+	// ZGraphParams
+	typedef zimgxx::zfilter_graph_builder_params ZGraphParams;
+	py::class_<ZGraphParams> zgraph_params(m, "ZGraphParams");
+	zgraph_params
 		.def(py::init<>())
-		.def_readwrite("resample_filter", &Zparams::resample_filter)
-		.def_readwrite("filter_param_a", &Zparams::filter_param_a)
-		.def_readwrite("filter_param_b", &Zparams::filter_param_b)
-		.def_readwrite("resample_filter_uv", &Zparams::resample_filter_uv)
-		.def_readwrite("filter_param_a_uv", &Zparams::filter_param_a_uv)
-		.def_readwrite("filter_param_b_uv", &Zparams::filter_param_b_uv)
-		.def_readwrite("dither_type", &Zparams::dither_type)
-		.def_readwrite("cpu_type", &Zparams::cpu_type)
-		.def_readwrite("nominal_peak_luminance", &Zparams::nominal_peak_luminance)
+		.def_readwrite("resample_filter", &ZGraphParams::resample_filter)
+		.def_readwrite("filter_param_a", &ZGraphParams::filter_param_a)
+		.def_readwrite("filter_param_b", &ZGraphParams::filter_param_b)
+		.def_readwrite("resample_filter_uv", &ZGraphParams::resample_filter_uv)
+		.def_readwrite("filter_param_a_uv", &ZGraphParams::filter_param_a_uv)
+		.def_readwrite("filter_param_b_uv", &ZGraphParams::filter_param_b_uv)
+		.def_readwrite("dither_type", &ZGraphParams::dither_type)
+		.def_readwrite("cpu_type", &ZGraphParams::cpu_type)
+		.def_readwrite("nominal_peak_luminance", &ZGraphParams::nominal_peak_luminance)
 		;
 	// ZResizeParams
 	py::class_<ZResizeParams> zresize_params(m, "ZResizeParams");
@@ -332,7 +332,7 @@ PYBIND11_MODULE(zimg, m)
 	py::class_<ZFilterPy> zfilter(m, "ZFilter");
 	zfilter
 		// constructors
-		.def(py::init<const Zformat &, const Zformat &, const Zparams &>(),
+		.def(py::init<const Zformat &, const Zformat &, const ZGraphParams &>(),
 			"src_format"_a, "dst_format"_a, "params"_a)
 		.def(py::init<const ZResizeParams &,
 			unsigned, unsigned, unsigned, unsigned,
