@@ -1,2 +1,3 @@
 from zimg import zimg
-from zimg.zresize import *
+from zimg.format import *
+from zimg.resize import *
