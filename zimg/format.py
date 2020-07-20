@@ -3,6 +3,8 @@ from zimg import zimg
 
 __all__ = ['FormatCvt', 'convertFormat']
 
+# NOTE: ZIMG implement BT709, BT601, BT2020 transfer as a gamma=2.4 curve, which differs from the standards
+
 depth_map = {np.dtype('uint8'): 8, np.dtype('uint16'): 16, np.dtype('float32'): 32}
 
 def createFormat(width, height, depth, color=None, range=None, matrix=None, transfer=None, primaries=None):

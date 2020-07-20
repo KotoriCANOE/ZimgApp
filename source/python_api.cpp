@@ -232,6 +232,7 @@ PYBIND11_MODULE(zimg, m)
 		.value("CHROMATICITY_DERIVED_NCL", ZIMG_MATRIX_CHROMATICITY_DERIVED_NCL)
 		.value("CHROMATICITY_DERIVED_CL", ZIMG_MATRIX_CHROMATICITY_DERIVED_CL)
 		.value("ICTCP", ZIMG_MATRIX_ICTCP);
+	// NOTE: ZIMG implement BT709, BT601, BT2020 transfer as a gamma=2.4 curve, which differs from the standards
 	py::enum_<zimg_transfer_characteristics_e>(m, "Transfer")
 		.value("INTERNAL", ZIMG_TRANSFER_INTERNAL)
 		.value("BT709", ZIMG_TRANSFER_BT709)
